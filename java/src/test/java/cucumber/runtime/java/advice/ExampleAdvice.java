@@ -18,6 +18,11 @@ public class ExampleAdvice {
         this.validTimeUnits = validTimeUnits;
     }
 
+    @Advice(value = "^just run it,", pointcuts = Deferred.class)
+    public void justRunIt(Runnable stepdef) throws Exception {
+        stepdef.run();
+    }
+
     /**
      * This advice waits a specified number of units and then executes the
      * original stepdef.
@@ -28,7 +33,7 @@ public class ExampleAdvice {
      * @param number of units to wait
      * @param unit of the number
      */
-    @Advice(value = "^(\\d+) ([^\\d\\W]\\w*) have passed, (.+)$", stepGroup = 3, pointcuts =  Timed.class)
+    @Advice(value = "^(\\d+) ([^\\d\\W]\\w*) have passed,", pointcuts =  Timed.class)
     public void timed(Runnable stepdef, int number, String unit) throws InterruptedException {
         TimeUnit timeUnit =
             checkTimeUnit(unit);

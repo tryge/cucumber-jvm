@@ -1,122 +1,137 @@
 package cucumber.runtime.java;
 
-import cucumber.runtime.*;
+import cucumber.runtime.JdkPatternArgumentMatcher;
+import cucumber.runtime.ParameterType;
+import cucumber.runtime.StepDefinition;
+import cucumber.runtime.Utils;
 import gherkin.I18n;
 import gherkin.formatter.Argument;
-import gherkin.formatter.model.Comment;
 import gherkin.formatter.model.Step;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
-import java.util.Collections;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * User: michael
- * Date: 7/5/12
- * Time: 10:36 PM
- */
-class JavaAdviceDefinition implements StepDefinition {
-    private final Glue glue;
-    private final Method method;
-    private final Pattern pattern;
-    private final int stepGroup;
-    private final List<Class<? extends Annotation>> advises;
-    private final int timeout;
-    private final JdkPatternArgumentMatcher argumentMatcher;
-    private final ObjectFactory objectFactory;
-    private List<ParameterType> parameterTypes;
+class JavaAdviceDefinition {
+	final Method method;
+	final Pattern pattern;
+	final List<Class<? extends Annotation>> advices;
+	final int timeout;
+	final JdkPatternArgumentMatcher argumentMatcher;
+	final List<ParameterType> parameterTypes;
+	final ObjectFactory objectFactory;
 
-    public JavaAdviceDefinition(Glue glue, Method method, Pattern pattern, int stepGroup, List<Class<? extends Annotation>> advises, int timeout, ObjectFactory objectFactory) {
-        this.glue = glue;
-        this.method = method;
-        this.parameterTypes = ParameterType.fromMethod(method);
-        // remove the Runnable type
-        this.parameterTypes.remove(0);
-        // add the type for the group of the original step
-        this.parameterTypes.add(stepGroup - 1, new ParameterType(String.class, null));
-        this.pattern = pattern;
-        this.stepGroup = stepGroup;
-        this.advises = advises;
-        this.argumentMatcher = new JdkPatternArgumentMatcher(pattern);
-        this.timeout = timeout;
-        this.objectFactory = objectFactory;
-    }
+	public JavaAdviceDefinition(Method method, Pattern pattern, List<Class<? extends Annotation>> advices, int timeout, ObjectFactory objectFactory) {
+		this.method = method;
+		this.parameterTypes = ParameterType.fromMethod(method);
+		this.parameterTypes.remove(0); // remove the Runnable type
+		this.pattern = pattern;
+		this.advices = advices;
+		this.argumentMatcher = new JdkPatternArgumentMatcher(pattern);
+		this.timeout = timeout;
+		this.objectFactory = objectFactory;
+	}
 
-    @Override
-    public void execute(I18n i18n, Object[] args) throws Throwable {
-        Step step = new Step(Collections.<Comment>emptyList(), "Keyword", (String)args[stepGroup-1], 0, null, null);
-        StepDefinitionMatch match = glue.stepDefinitionMatch("unknown", step, i18n);
+	public int parameterCount() {
+		return parameterTypes.size();
+	}
 
-        if (match == null) {
-            throw new RuntimeException("Undefined Step: " + step.getName());
-        }
+	public StepDefinition advise(JavaStepDefinition stepDefinition) {
+		return new AdvisedStepDefinition(this, stepDefinition);
+	}
+}
 
-        // that's probably the worst part of this patch, both the exposed step definition and the cast
-        // however, the step definition has to be checked for the annotations, and we need to ensure
-        // that there actually is a step definition to execute
-        JavaStepDefinition stepDefinition = (JavaStepDefinition)match.getStepDefinition();
-        if (!stepDefinition.isAnnotatedWithOneOf(advises)) {
-            throw new RuntimeException("Advice cannot be applied to: " + step.getName());
-        }
+class AdvisedStepDefinition implements StepDefinition {
+	private final JavaAdviceDefinition advice;
+	private final JavaStepDefinition step;
 
-        Object[] params = new Object[args.length];
-        params[0] = new StepRunnable(match, i18n);
-        System.arraycopy(args, 0, params, 1, stepGroup - 1);
-        System.arraycopy(args, stepGroup, params, stepGroup, args.length - stepGroup);
+	public AdvisedStepDefinition(JavaAdviceDefinition advice, JavaStepDefinition step) {
+		this.advice = advice;
+		this.step = step;
+	}
 
-        Utils.invoke(objectFactory.getInstance(method.getDeclaringClass()), method, timeout, params);
-    }
+	@Override
+	public List<Argument> matchedArguments(Step step) {
+		Pattern pattern = Pattern.compile(advice.pattern.toString() + "\\s*");
 
-    @Override
-    public List<Argument> matchedArguments(Step step) {
-        return argumentMatcher.argumentsFrom(step.getName());
-    }
+		Matcher matcher = pattern.matcher(step.getName());
+		if (matcher.find()) {
+			int adviceEnd = matcher.end();
 
-    @Override
-    public String getLocation(boolean detail) {
-        MethodFormat format = detail ? MethodFormat.FULL : MethodFormat.SHORT;
-        return format.format(method);
-    }
+			String advicePart = step.getName().substring(0, adviceEnd);
+			String stepPart = step.getName().substring(adviceEnd).trim();
 
-    @Override
-    public Integer getParameterCount() {
-        return parameterTypes.size();
-    }
+			Step modifiedStep = new Step(step.getComments(), step.getKeyword(), stepPart, step.getLine(), step.getRows(), step.getDocString());
 
-    @Override
-    public ParameterType getParameterType(int n, Type argumentType) throws IndexOutOfBoundsException {
-        return parameterTypes.get(n);
-    }
+			List<Argument> matchedAdviceArguments = advice.argumentMatcher.argumentsFrom(advicePart.trim());
+			List<Argument> stepAdviceArguments = this.step.matchedArguments(modifiedStep);
 
-    @Override
-    public boolean isDefinedAt(StackTraceElement e) {
-        return e.getClassName().equals(method.getDeclaringClass().getName()) && e.getMethodName().equals(method.getName());
-    }
+			if (stepAdviceArguments == null) {
+				return null;
+			}
 
-    @Override
-    public String getPattern() {
-        return pattern.pattern();
-    }
+			matchedAdviceArguments.addAll(this.step.matchedArguments(modifiedStep));
+			return matchedAdviceArguments;
+		}
 
-    private class StepRunnable implements Runnable {
-        private final StepDefinitionMatch match;
-        private final I18n i18n;
+		return null;
+	}
 
-        private StepRunnable(StepDefinitionMatch match, I18n i18n) {
-            this.match = match;
-            this.i18n = i18n;
-        }
+	@Override
+	public String getLocation(boolean b) {
+		return step.getLocation(b);
+	}
 
-        @Override
-        public void run() {
-            try {
-                match.runStep(i18n);
-            } catch (Throwable th) {
-                throw new RuntimeException(th.getMessage(), th);
-            }
-        }
-    }
+	@Override
+	public Integer getParameterCount() {
+		return advice.parameterCount() + step.getParameterCount();
+	}
+
+	@Override
+	public ParameterType getParameterType(int i, Type type) throws IndexOutOfBoundsException {
+		int adviceParameters = advice.parameterCount();
+		if (i < adviceParameters) {
+			return advice.parameterTypes.get(i);
+		} else {
+			return step.getParameterType(i - adviceParameters, type);
+		}
+	}
+
+	@Override
+	public void execute(final I18n i18n, Object[] objects) throws Throwable {
+		int parameterCount = step.getParameterCount();
+
+		final Object[] stepParameters = new Object[parameterCount];
+		System.arraycopy(objects, objects.length - parameterCount, stepParameters, 0, parameterCount);
+
+		Runnable wrappedStepExecution = new Runnable() {
+			public void run() {
+				try {
+					step.execute(i18n, stepParameters);
+				} catch (Throwable throwable) {
+					throwable.printStackTrace();
+				}
+			}
+		};
+
+		Object[] adviceParameters = new Object[advice.parameterCount() + 1];
+		adviceParameters[0] = wrappedStepExecution;
+		System.arraycopy(objects, 0, adviceParameters, 1, advice.parameterCount());
+
+		Object adviceObj = advice.objectFactory.getInstance(advice.method.getDeclaringClass());
+		Utils.invoke(adviceObj, advice.method, advice.timeout, adviceParameters);
+	}
+
+	@Override
+	public boolean isDefinedAt(StackTraceElement stackTraceElement) {
+		return step.isDefinedAt(stackTraceElement);
+	}
+
+	@Override
+	public String getPattern() {
+		return advice.pattern.toString() + "\\s*" + step.getPattern();
+	}
 }

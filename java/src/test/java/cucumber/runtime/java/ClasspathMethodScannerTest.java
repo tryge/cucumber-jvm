@@ -11,10 +11,7 @@ import org.mockito.internal.util.reflection.Whitebox;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.isA;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.*;
 
 public class ClasspathMethodScannerTest {
 
@@ -58,7 +55,7 @@ public class ClasspathMethodScannerTest {
     }
 
     @Test
-    public void loadGlue_registers_the_advice_and_declaring_class_in_the_object_factor() throws NoSuchMethodException {
+    public void loadGlue_registers_declaring_class_in_the_object_factory() throws NoSuchMethodException {
         ClasspathResourceLoader resourceLoader = new ClasspathResourceLoader(Thread.currentThread().getContextClassLoader());
         ClasspathMethodScanner classpathMethodScanner = new ClasspathMethodScanner(resourceLoader);
 
@@ -70,7 +67,6 @@ public class ClasspathMethodScannerTest {
         // this delegates to classpathMethodScanner.scan which we test
         classpathMethodScanner.scan(backend, ExampleAdvice.class.getMethod("timed", Runnable.class, int.class, String.class), ExampleAdvice.class);
 
-        verify(world).addStepDefinition(isA(JavaAdviceDefinition.class));
         verify(factory, times(1)).addClass(ExampleAdvice.class);
         verifyNoMoreInteractions(factory);
     }

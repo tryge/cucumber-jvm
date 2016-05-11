@@ -1,15 +1,10 @@
 package cucumber.runtime.java;
 
-import cucumber.runtime.JdkPatternArgumentMatcher;
-import cucumber.runtime.MethodFormat;
-import cucumber.runtime.ParameterType;
-import cucumber.runtime.StepDefinition;
-import cucumber.runtime.Utils;
+import cucumber.runtime.*;
 import gherkin.I18n;
 import gherkin.formatter.Argument;
 import gherkin.formatter.model.Step;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.List;
@@ -64,13 +59,8 @@ class JavaStepDefinition implements StepDefinition {
         return pattern.pattern();
     }
 
-    boolean isAnnotatedWithOneOf(List<Class<? extends Annotation>> advises) {
-        Annotation[] annotations = method.getDeclaredAnnotations();
-        for (Annotation annotation : annotations) {
-            if (advises.contains(annotation.annotationType())) {
-                return true;
-            }
-        }
-        return false;
+    Method getMethod() {
+        return method;
     }
 }
+

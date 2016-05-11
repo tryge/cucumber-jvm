@@ -13,8 +13,7 @@ import gherkin.formatter.model.Step;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Pattern;
 
 public class JavaBackend implements Backend {
@@ -23,6 +22,8 @@ public class JavaBackend implements Backend {
     private final ClasspathResourceLoader classpathResourceLoader;
     private final ClasspathMethodScanner classpathMethodScanner;
     private Glue glue;
+    private final List<JavaStepDefinition> steps = new ArrayList<JavaStepDefinition>();
+    private final Map<Class<? extends Annotation>, JavaAdviceDefinition> advices = new HashMap<Class<? extends Annotation>, JavaAdviceDefinition>();
 
     public JavaBackend(ResourceLoader ignored) {
         classpathResourceLoader = new ClasspathResourceLoader(Thread.currentThread().getContextClassLoader());
@@ -50,6 +51,7 @@ public class JavaBackend implements Backend {
     public void loadGlue(Glue glue, List<String> gluePaths) {
         this.glue = glue;
         classpathMethodScanner.scan(this, gluePaths);
+        applyAdvices();
     }
 
     /**
@@ -63,6 +65,20 @@ public class JavaBackend implements Backend {
     public void loadGlue(Glue glue, Method method, Class<?> glueCodeClass) {
         this.glue = glue;
         classpathMethodScanner.scan(this, method, glueCodeClass);
+        applyAdvices();
+    }
+
+    private void applyAdvices() {
+        for (JavaStepDefinition stepDefinition : steps) {
+            Method method = stepDefinition.getMethod();
+            Annotation[] annotations = method.getDeclaredAnnotations();
+            for (Annotation annotation: annotations) {
+                JavaAdviceDefinition advice = advices.get(annotation.annotationType());
+                if (advice != null) {
+                    glue.addStepDefinition(advice.advise(stepDefinition));
+                }
+            }
+        }
     }
 
     @Override
@@ -88,7 +104,9 @@ public class JavaBackend implements Backend {
     void addStepDefinition(Annotation annotation, Method method) {
         try {
             objectFactory.addClass(method.getDeclaringClass());
-            glue.addStepDefinition(new JavaStepDefinition(method, pattern(annotation), timeout(annotation), objectFactory));
+            JavaStepDefinition stepDefinition = new JavaStepDefinition(method, pattern(annotation), timeout(annotation), objectFactory);
+            steps.add(stepDefinition);
+            glue.addStepDefinition(stepDefinition);
         } catch (DuplicateStepDefinitionException e) {
             throw e;
         } catch (Throwable e) {
@@ -99,7 +117,13 @@ public class JavaBackend implements Backend {
     public void addAdviceDefinition(Annotation annotation, Method method) {
         try {
             objectFactory.addClass(method.getDeclaringClass());
-            glue.addStepDefinition(new JavaAdviceDefinition(glue, method, pattern(annotation), stepGroup(annotation), pointcuts(annotation), timeout(annotation), objectFactory));
+
+            List<Class<? extends Annotation>> pointcuts = pointcuts(annotation);
+            JavaAdviceDefinition adviceDefinition = new JavaAdviceDefinition(method, pattern(annotation), pointcuts, timeout(annotation), objectFactory);
+
+            for (Class<? extends Annotation> pointcut : pointcuts) {
+                advices.put(pointcut, adviceDefinition);
+            }
         } catch (DuplicateStepDefinitionException e) {
             throw e;
         } catch (Throwable e) {
@@ -113,16 +137,6 @@ public class JavaBackend implements Backend {
         return Pattern.compile(regexpString);
     }
 
-    private int stepGroup(Annotation annotation) throws Throwable {
-        Method method = annotation.getClass().getMethod("stepGroup");
-        return (Integer) Utils.invoke(annotation, method, 0);
-    }
-
-    private int timeout(Annotation annotation) throws Throwable {
-        Method regexpMethod = annotation.getClass().getMethod("timeout");
-        return (Integer) Utils.invoke(annotation, regexpMethod, 0);
-    }
-
     @SuppressWarnings("unchecked")
     private List<Class<? extends Annotation>> pointcuts(Annotation annotation) throws Throwable {
         Method method = annotation.getClass().getMethod("pointcuts");
@@ -131,6 +145,11 @@ public class JavaBackend implements Backend {
         enforcePointcutAnnotation(pointcuts);
 
         return Arrays.asList(pointcuts);
+    }
+
+    private int timeout(Annotation annotation) throws Throwable {
+        Method regexpMethod = annotation.getClass().getMethod("timeout");
+        return (Integer) Utils.invoke(annotation, regexpMethod, 0);
     }
 
     private void enforcePointcutAnnotation(Class<? extends Annotation>[] pointcuts) {
