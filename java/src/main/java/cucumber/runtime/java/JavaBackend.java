@@ -23,7 +23,7 @@ public class JavaBackend implements Backend {
     private final ClasspathMethodScanner classpathMethodScanner;
     private Glue glue;
     private final List<JavaStepDefinition> steps = new ArrayList<JavaStepDefinition>();
-    private final Map<Class<? extends Annotation>, JavaAdviceDefinition> advices = new HashMap<Class<? extends Annotation>, JavaAdviceDefinition>();
+    private final Map<Class<? extends Annotation>, List<JavaAdviceDefinition>> advices = new HashMap<Class<? extends Annotation>, List<JavaAdviceDefinition>>();
 
     public JavaBackend(ResourceLoader ignored) {
         classpathResourceLoader = new ClasspathResourceLoader(Thread.currentThread().getContextClassLoader());
@@ -73,9 +73,11 @@ public class JavaBackend implements Backend {
             Method method = stepDefinition.getMethod();
             Annotation[] annotations = method.getDeclaredAnnotations();
             for (Annotation annotation: annotations) {
-                JavaAdviceDefinition advice = advices.get(annotation.annotationType());
-                if (advice != null) {
-                    glue.addStepDefinition(advice.advise(stepDefinition));
+                List<JavaAdviceDefinition> advices = this.advices.get(annotation.annotationType());
+                if (advices != null) {
+                    for (JavaAdviceDefinition advice : advices) {
+                        glue.addStepDefinition(advice.advise(stepDefinition));
+                    }
                 }
             }
         }
@@ -122,7 +124,12 @@ public class JavaBackend implements Backend {
             JavaAdviceDefinition adviceDefinition = new JavaAdviceDefinition(method, pattern(annotation), pointcuts, timeout(annotation), objectFactory);
 
             for (Class<? extends Annotation> pointcut : pointcuts) {
-                advices.put(pointcut, adviceDefinition);
+                List<JavaAdviceDefinition> existingAdvices = advices.get(pointcut);
+                if (existingAdvices == null) {
+                    existingAdvices = new ArrayList<JavaAdviceDefinition>();
+                }
+                existingAdvices.add(adviceDefinition);
+                advices.put(pointcut, existingAdvices);
             }
         } catch (DuplicateStepDefinitionException e) {
             throw e;
