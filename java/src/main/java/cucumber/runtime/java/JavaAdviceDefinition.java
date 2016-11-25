@@ -109,11 +109,13 @@ class AdvisedStepDefinition implements StepDefinition {
 
 		Runnable wrappedStepExecution = new Runnable() {
 			public void run() {
-				try {
-					step.execute(i18n, stepParameters);
-				} catch (Throwable throwable) {
-					throwable.printStackTrace();
-				}
+                            try {
+				step.execute(i18n, stepParameters);
+                            } catch(RuntimeException re) {
+                                throw re;
+                            } catch(Throwable th) {
+                                throw new RuntimeException(th.getMessage(), th);
+                            }
 			}
 		};
 
