@@ -71,6 +71,10 @@ public class Runtime implements UnreportedStepExecutor {
         return new ClasspathResourceLoader(classLoader).instantiateSubclasses(Backend.class, "cucumber.runtime", new Class[]{ResourceLoader.class}, new Object[]{resourceLoader});
     }
 
+    public void skipNextSteps() {
+        skipNextStep = true;
+    }
+
     public void addError(Throwable error) {
         errors.add(error);
     }
