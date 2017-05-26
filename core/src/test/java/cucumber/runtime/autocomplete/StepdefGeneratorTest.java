@@ -19,7 +19,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -130,7 +129,7 @@ public class StepdefGeneratorTest {
             }
 
             @Override
-            public void execute(I18n i18n, Object[] args) throws Throwable {
+            public void execute(I18n i18n, Step matchedStep, Object[] args) throws Throwable {
                 throw new UnsupportedOperationException();
             }
 

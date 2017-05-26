@@ -41,7 +41,7 @@ public class StepDefinitionMatch extends Match {
 
     public void runStep(I18n i18n) throws Throwable {
         try {
-            stepDefinition.execute(i18n, transformedArgs(step, localizedXStreams.get(i18n.getLocale()), i18n.getLocale()));
+            stepDefinition.execute(i18n, step, transformedArgs(step, localizedXStreams.get(i18n.getLocale()), i18n.getLocale()));
         } catch (CucumberException e) {
             throw e;
         } catch (Throwable t) {
