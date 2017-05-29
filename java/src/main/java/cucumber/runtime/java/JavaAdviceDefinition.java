@@ -101,7 +101,7 @@ class AdvisedStepDefinition implements StepDefinition {
 	}
 
 	@Override
-	public void execute(final I18n i18n, Object[] objects) throws Throwable {
+	public void execute(final I18n i18n, final Step matchedStep, Object[] objects) throws Throwable {
 		int parameterCount = step.getParameterCount();
 
 		final Object[] stepParameters = new Object[parameterCount];
@@ -110,7 +110,7 @@ class AdvisedStepDefinition implements StepDefinition {
 		Runnable wrappedStepExecution = new Runnable() {
 			public void run() {
                             try {
-				step.execute(i18n, stepParameters);
+				step.execute(i18n, matchedStep, stepParameters);
                             } catch(RuntimeException re) {
                                 throw re;
                             } catch(Throwable th) {
@@ -118,9 +118,10 @@ class AdvisedStepDefinition implements StepDefinition {
                             }
 			}
 		};
+		RunnableStep runnableStep = new RunnableStep(matchedStep, wrappedStepExecution);
 
 		Object[] adviceParameters = new Object[advice.parameterCount() + 1];
-		adviceParameters[0] = wrappedStepExecution;
+		adviceParameters[0] = runnableStep;
 		System.arraycopy(objects, 0, adviceParameters, 1, advice.parameterCount());
 
 		Object adviceObj = advice.objectFactory.getInstance(advice.method.getDeclaringClass());

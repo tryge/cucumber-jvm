@@ -41,7 +41,7 @@ public interface StepDefinition {
      * Invokes the step definition. The method should raise a Throwable
      * if the invocation fails, which will cause the step to fail.
      */
-    void execute(I18n i18n, Object[] args) throws Throwable;
+    void execute(I18n i18n, Step matchedStep, Object[] args) throws Throwable;
 
     /**
      * Return true if this matches the location. This is used to filter
